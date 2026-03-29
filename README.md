@@ -88,6 +88,28 @@ When `--repeat-count > 1`, it also writes:
 - `run_000/result.json`, `run_001/result.json`, ...
 - `batch_summary.json` with equality checks across runs
 
+## REPP on Detection IoU
+
+Use the clean detection box as the reference box, search for a bias-field perturbation, and mark success when perturbed IoU drops below `0.8`:
+
+```bash
+python inference_moondream_repp.py \
+  --image demo/car.jpg \
+  --query "car" \
+  --device cpu \
+  --epsilon 0.1 \
+  --iou-threshold 0.8 \
+  --count-particles 16 \
+  --count-mh-steps 20 \
+  --output-dir output/car_repp
+```
+
+Outputs:
+
+- `result.json`
+- `clean_box.png`
+- `adv_box.png`
+
 ## Notes
 
 - This uses the local open-source `vikhyatk/moondream2` model.
