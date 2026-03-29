@@ -94,6 +94,8 @@ def draw_boxes(image, objects, save_path):
     draw = ImageDraw.Draw(canvas)
     for idx, obj in enumerate(objects):
         box = obj.get("bbox") or obj.get("box") or obj.get("bounding_box")
+        if box is None and all(key in obj for key in ("x_min", "y_min", "x_max", "y_max")):
+            box = [obj["x_min"], obj["y_min"], obj["x_max"], obj["y_max"]]
         if box is None:
             continue
         x0, y0, x1, y1 = normalize_box_to_pixels(box, width, height)
