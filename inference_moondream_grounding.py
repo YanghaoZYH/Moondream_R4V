@@ -15,6 +15,7 @@ def parse_args():
     parser.add_argument("--mode", choices=["detect", "point", "both"], default="both")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--output-dir", type=str, default="output")
+    parser.add_argument("--repeat-count", type=int, default=1)
     parser.add_argument("--local-files-only", action="store_true")
     return parser.parse_args()
 
@@ -83,38 +84,112 @@ def draw_boxes(image, objects, save_path):
     canvas.save(save_path)
 
 
-def main():
-    args = parse_args()
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    model = load_model(args.model_path, args.revision, args.device, args.local_files_only)
-    image = Image.open(args.image).convert("RGB")
-
+def run_single_inference(model, image, image_path, query, mode, output_dir, run_index=None):
     result = {
-        "model_path": args.model_path,
-        "revision": args.revision,
-        "image_path": args.image,
-        "query": args.query,
-        "mode": args.mode,
+        "image_path": image_path,
+        "query": query,
+        "mode": mode,
+        "run_index": run_index,
         "detect": None,
         "point": None,
     }
 
-    if args.mode in ("detect", "both"):
-        detect_result = model.detect(image, args.query)
+    if mode in ("detect", "both"):
+        detect_result = model.detect(image, query)
         result["detect"] = detect_result
         draw_boxes(image, detect_result.get("objects", []), output_dir / "detect.png")
 
-    if args.mode in ("point", "both"):
-        point_result = model.point(image, args.query)
+    if mode in ("point", "both"):
+        point_result = model.point(image, query)
         result["point"] = point_result
         draw_points(image, point_result.get("points", []), output_dir / "point.png")
 
     with open(output_dir / "result.json", "w") as f:
         json.dump(result, f, indent=2)
 
-    print(json.dumps(result, indent=2))
+    return result
+
+
+def compare_runs(results):
+    if not results:
+        return {
+            "num_runs": 0,
+            "all_detect_equal": True,
+            "all_point_equal": True,
+            "all_equal": True,
+            "pairwise": [],
+        }
+
+    baseline = results[0]
+    pairwise = []
+    all_detect_equal = True
+    all_point_equal = True
+    for result in results[1:]:
+        detect_equal = result.get("detect") == baseline.get("detect")
+        point_equal = result.get("point") == baseline.get("point")
+        all_detect_equal = all_detect_equal and detect_equal
+        all_point_equal = all_point_equal and point_equal
+        pairwise.append(
+            {
+                "run": result["run_index"],
+                "detect_equal_vs_run0": detect_equal,
+                "point_equal_vs_run0": point_equal,
+                "all_equal_vs_run0": detect_equal and point_equal,
+            }
+        )
+    return {
+        "num_runs": len(results),
+        "all_detect_equal": all_detect_equal,
+        "all_point_equal": all_point_equal,
+        "all_equal": all_detect_equal and all_point_equal,
+        "pairwise": pairwise,
+    }
+
+
+def main():
+    args = parse_args()
+    if args.repeat_count < 1:
+        raise ValueError("--repeat-count must be at least 1")
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    model = load_model(args.model_path, args.revision, args.device, args.local_files_only)
+    image = Image.open(args.image).convert("RGB")
+
+    results = []
+    for run_index in range(args.repeat_count):
+        run_output_dir = output_dir if args.repeat_count == 1 else output_dir / f"run_{run_index:03d}"
+        run_output_dir.mkdir(parents=True, exist_ok=True)
+        result = run_single_inference(
+            model=model,
+            image=image,
+            image_path=args.image,
+            query=args.query,
+            mode=args.mode,
+            output_dir=run_output_dir,
+            run_index=run_index,
+        )
+        result["model_path"] = args.model_path
+        result["revision"] = args.revision
+        results.append(result)
+
+    if args.repeat_count == 1:
+        print(json.dumps(results[0], indent=2))
+        return
+
+    summary = {
+        "model_path": args.model_path,
+        "revision": args.revision,
+        "image_path": args.image,
+        "query": args.query,
+        "mode": args.mode,
+        "repeat_count": args.repeat_count,
+        "determinism": compare_runs(results),
+    }
+    with open(output_dir / "batch_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+    print(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":

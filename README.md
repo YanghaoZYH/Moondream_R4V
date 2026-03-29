@@ -63,6 +63,18 @@ python inference_moondream_grounding.py \
   --output-dir output/person_point
 ```
 
+Repeat the same image 5 times to test whether outputs are identical:
+
+```bash
+python inference_moondream_grounding.py \
+  --image examples/red_box_scene.png \
+  --query "red box" \
+  --mode both \
+  --device cuda \
+  --repeat-count 5 \
+  --output-dir output/red_box_scene_repeat5
+```
+
 ## Outputs
 
 Each run writes:
@@ -70,6 +82,11 @@ Each run writes:
 - `result.json`
 - `detect.png` when `mode` includes `detect`
 - `point.png` when `mode` includes `point`
+
+When `--repeat-count > 1`, it also writes:
+
+- `run_000/result.json`, `run_001/result.json`, ...
+- `batch_summary.json` with equality checks across runs
 
 ## Notes
 
