@@ -1,1 +1,65 @@
 # Moondream_R4V
+
+Local `moondream2` grounding pipeline for:
+
+- object detection
+- pointing
+- structured JSON output
+- PNG visualization
+
+## Install
+
+```bash
+pip install "transformers>=4.51.1" "torch>=2.7.0" "accelerate>=1.10.0" "Pillow>=11.0.0"
+```
+
+## Run
+
+Detection + pointing:
+
+```bash
+python inference_moondream_grounding.py \
+  --model-path vikhyatk/moondream2 \
+  --revision 2025-06-21 \
+  --image path/to/image.jpg \
+  --query "red box" \
+  --mode both \
+  --device cuda \
+  --output-dir output/red_box
+```
+
+Detection only:
+
+```bash
+python inference_moondream_grounding.py \
+  --image path/to/image.jpg \
+  --query "person" \
+  --mode detect \
+  --device cuda \
+  --output-dir output/person_detect
+```
+
+Pointing only:
+
+```bash
+python inference_moondream_grounding.py \
+  --image path/to/image.jpg \
+  --query "person" \
+  --mode point \
+  --device cuda \
+  --output-dir output/person_point
+```
+
+## Outputs
+
+Each run writes:
+
+- `result.json`
+- `detect.png` when `mode` includes `detect`
+- `point.png` when `mode` includes `point`
+
+## Notes
+
+- This uses the local open-source `vikhyatk/moondream2` model.
+- It does not call the Moondream API.
+- Box and point coordinates are converted to pixels for visualization.
