@@ -1,5 +1,6 @@
 import argparse
 import json
+import time
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -106,6 +107,7 @@ def draw_boxes(image, objects, save_path):
 
 
 def run_single_inference(model, image, image_path, query, mode, output_dir, run_index=None):
+    start_time = time.perf_counter()
     result = {
         "image_path": image_path,
         "query": query,
@@ -127,9 +129,9 @@ def run_single_inference(model, image, image_path, query, mode, output_dir, run_
         if skipped_points:
             result["point_visualization_skipped"] = skipped_points
 
+    result["latency_seconds"] = time.perf_counter() - start_time
     with open(output_dir / "result.json", "w") as f:
         json.dump(result, f, indent=2)
-
     return result
 
 
@@ -208,6 +210,12 @@ def main():
         "query": args.query,
         "mode": args.mode,
         "repeat_count": args.repeat_count,
+        "latency_seconds": {
+            "per_run": [result["latency_seconds"] for result in results],
+            "mean": sum(result["latency_seconds"] for result in results) / len(results),
+            "min": min(result["latency_seconds"] for result in results),
+            "max": max(result["latency_seconds"] for result in results),
+        },
         "determinism": compare_runs(results),
     }
     with open(output_dir / "batch_summary.json", "w") as f:
