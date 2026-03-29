@@ -40,9 +40,21 @@ def image_size(image):
 
 
 def normalize_point_to_pixels(point, width, height):
-    if len(point) != 2:
-        raise ValueError(f"Expected 2D point, got {point}")
-    x, y = float(point[0]), float(point[1])
+    if isinstance(point, dict):
+        if "x" in point and "y" in point:
+            x, y = float(point["x"]), float(point["y"])
+        elif "point" in point and len(point["point"]) == 2:
+            x, y = float(point["point"][0]), float(point["point"][1])
+        elif "xy" in point and len(point["xy"]) == 2:
+            x, y = float(point["xy"][0]), float(point["xy"][1])
+        elif "coordinates" in point and len(point["coordinates"]) == 2:
+            x, y = float(point["coordinates"][0]), float(point["coordinates"][1])
+        else:
+            raise ValueError(f"Expected point dict with x/y or point, got {point}")
+    else:
+        if len(point) != 2:
+            raise ValueError(f"Expected 2D point, got {point}")
+        x, y = float(point[0]), float(point[1])
     if 0.0 <= x <= 1.0 and 0.0 <= y <= 1.0:
         return x * width, y * height
     return x, y
@@ -61,12 +73,19 @@ def draw_points(image, points, save_path):
     width, height = image.size
     canvas = image.copy()
     draw = ImageDraw.Draw(canvas)
+    skipped_points = []
     for idx, point in enumerate(points):
-        x, y = normalize_point_to_pixels(point, width, height)
+        try:
+            x, y = normalize_point_to_pixels(point, width, height)
+        except (TypeError, ValueError, KeyError, IndexError):
+            skipped_points.append({"index": idx, "raw": point})
+            continue
         r = 7
         draw.ellipse((x - r, y - r, x + r, y + r), fill=(255, 80, 40), outline=(255, 255, 255), width=2)
-        draw.text((x + 8, y - 8), f"p{idx}", fill=(255, 80, 40))
+        label = point.get("label") if isinstance(point, dict) else None
+        draw.text((x + 8, y - 8), label or f"p{idx}", fill=(255, 80, 40))
     canvas.save(save_path)
+    return skipped_points
 
 
 def draw_boxes(image, objects, save_path):
@@ -102,7 +121,9 @@ def run_single_inference(model, image, image_path, query, mode, output_dir, run_
     if mode in ("point", "both"):
         point_result = model.point(image, query)
         result["point"] = point_result
-        draw_points(image, point_result.get("points", []), output_dir / "point.png")
+        skipped_points = draw_points(image, point_result.get("points", []), output_dir / "point.png")
+        if skipped_points:
+            result["point_visualization_skipped"] = skipped_points
 
     with open(output_dir / "result.json", "w") as f:
         json.dump(result, f, indent=2)
