@@ -225,9 +225,9 @@ def main():
     adv_image = chw_tensor_to_pil(perturbed)
     clean_vis = image.copy()
     adv_vis = adv_image.copy()
-    draw_box(clean_vis, reference_box, (54, 104, 191), "clean_ref")
-    draw_box(adv_vis, reference_box, (54, 104, 191), "clean_ref")
-    draw_box(adv_vis, best_eval["pred_box"], (255, 80, 40), "adv_pred")
+    draw_box(clean_vis, reference_box, (54, 104, 191), "gt_box")
+    draw_box(adv_vis, reference_box, (54, 104, 191), "gt_box")
+    draw_box(adv_vis, best_eval["pred_box"], (255, 80, 40), "adv_pred_box")
     clean_vis.save(output_dir / "clean_box.png")
     adv_vis.save(output_dir / "adv_box.png")
 
