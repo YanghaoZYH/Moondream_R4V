@@ -69,6 +69,12 @@ def normalize_box_to_pixels(box, width, height):
     return [x0, y0, x1, y1]
 
 
+def box_to_tensor(box, device=None):
+    if box is None:
+        return None
+    return torch.as_tensor(box, device=device, dtype=torch.float32)
+
+
 def extract_first_box(detect_result, width, height):
     for obj in detect_result.get("objects", []):
         box = get_box_from_object(obj)
@@ -81,23 +87,23 @@ def compute_iou(box_a, box_b):
     if box_a is None or box_b is None:
         return 0.0
 
-    ax0, ay0, ax1, ay1 = box_a
-    bx0, by0, bx1, by1 = box_b
+    box_a_t = box_a if torch.is_tensor(box_a) else torch.as_tensor(box_a, dtype=torch.float32)
+    box_b_t = box_b if torch.is_tensor(box_b) else torch.as_tensor(box_b, dtype=torch.float32, device=box_a_t.device)
 
-    inter_x0 = max(ax0, bx0)
-    inter_y0 = max(ay0, by0)
-    inter_x1 = min(ax1, bx1)
-    inter_y1 = min(ay1, by1)
-    inter_w = max(0.0, inter_x1 - inter_x0)
-    inter_h = max(0.0, inter_y1 - inter_y0)
+    inter_x0 = torch.maximum(box_a_t[0], box_b_t[0])
+    inter_y0 = torch.maximum(box_a_t[1], box_b_t[1])
+    inter_x1 = torch.minimum(box_a_t[2], box_b_t[2])
+    inter_y1 = torch.minimum(box_a_t[3], box_b_t[3])
+    inter_w = torch.clamp(inter_x1 - inter_x0, min=0.0)
+    inter_h = torch.clamp(inter_y1 - inter_y0, min=0.0)
     inter_area = inter_w * inter_h
 
-    area_a = max(0.0, ax1 - ax0) * max(0.0, ay1 - ay0)
-    area_b = max(0.0, bx1 - bx0) * max(0.0, by1 - by0)
+    area_a = torch.clamp(box_a_t[2] - box_a_t[0], min=0.0) * torch.clamp(box_a_t[3] - box_a_t[1], min=0.0)
+    area_b = torch.clamp(box_b_t[2] - box_b_t[0], min=0.0) * torch.clamp(box_b_t[3] - box_b_t[1], min=0.0)
     union = area_a + area_b - inter_area
-    if union <= 0.0:
+    if union.item() <= 0.0:
         return 0.0
-    return inter_area / union
+    return float((inter_area / union).item())
 
 
 def draw_box(image, box, color, label):
@@ -115,10 +121,11 @@ class MoondreamDetectionProblem:
         self.image = image
         self.query = query
         self.perturbation = perturbation
-        self.reference_box = reference_box
         self.width, self.height = image.size
         self.frames = pil_to_chw_tensor(image).unsqueeze(0)
         self.perturbation.prepare(self.frames)
+        self.reference_box = reference_box
+        self.reference_box_t = box_to_tensor(reference_box, device=self.frames.device)
         self.last_eval = None
 
     def __call__(self, coeff_batch):
@@ -140,7 +147,8 @@ class MoondreamDetectionProblem:
             pil_image = chw_tensor_to_pil(perturbed[batch_idx, 0])
             detect_result = self.model.detect(pil_image, self.query)
             pred_box = extract_first_box(detect_result, self.width, self.height)
-            iou = compute_iou(self.reference_box, pred_box)
+            pred_box_t = box_to_tensor(pred_box, device=self.frames.device)
+            iou = compute_iou(self.reference_box_t, pred_box_t)
             loss = iou - 0.8
             losses.append(loss)
             eval_details.append(
