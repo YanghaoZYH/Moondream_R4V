@@ -126,7 +126,10 @@ class MoondreamDetectionProblem:
             coeff_batch = torch.from_numpy(coeff_batch)
         if not torch.is_tensor(coeff_batch):
             coeff_batch = torch.tensor(coeff_batch)
-        coeff_batch = coeff_batch.to(dtype=self.perturbation.dtype)
+        coeff_batch = coeff_batch.to(
+            device=self.perturbation.frames_prepared.device,
+            dtype=self.perturbation.dtype,
+        )
         if coeff_batch.ndim == 1:
             coeff_batch = coeff_batch.unsqueeze(0)
 
@@ -148,7 +151,11 @@ class MoondreamDetectionProblem:
                 }
             )
         self.last_eval = eval_details
-        return torch.tensor(losses, dtype=self.perturbation.dtype)
+        return torch.tensor(
+            losses,
+            device=coeff_batch.device,
+            dtype=self.perturbation.dtype,
+        )
 
 
 def main():
