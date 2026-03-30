@@ -141,8 +141,12 @@ class MoondreamDetectionProblem:
             coeff_batch = coeff_batch.unsqueeze(0)
 
         perturbed = self.perturbation.transform_func(coeff_batch)
-        losses = []
-        eval_details = []
+        losses = torch.ones(
+            coeff_batch.shape[0],
+            device=coeff_batch.device,
+            dtype=self.perturbation.dtype,
+        )
+        eval_details = [None] * coeff_batch.shape[0]
         for batch_idx in range(perturbed.shape[0]):
             pil_image = chw_tensor_to_pil(perturbed[batch_idx, 0])
             detect_result = self.model.detect(pil_image, self.query)
@@ -150,20 +154,16 @@ class MoondreamDetectionProblem:
             pred_box_t = box_to_tensor(pred_box, device=self.frames.device)
             iou = compute_iou(self.reference_box_t, pred_box_t)
             loss = iou - 0.8
-            losses.append(loss)
-            eval_details.append(
-                {
-                    "iou": iou,
-                    "pred_box": pred_box,
-                    "detect": detect_result,
-                }
-            )
+            losses[batch_idx] = loss
+            eval_details[batch_idx] = {
+                "iou": iou,
+                "pred_box": pred_box,
+                "detect": detect_result,
+            }
+            if loss < 0:
+                break
         self.last_eval = eval_details
-        return torch.tensor(
-            losses,
-            device=coeff_batch.device,
-            dtype=self.perturbation.dtype,
-        )
+        return losses
 
 
 def main():
